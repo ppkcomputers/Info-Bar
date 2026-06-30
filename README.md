@@ -3,6 +3,15 @@
 Arch Linux System Utilities & InfoBar
 A collection of lightweight Bash scripts designed to keep your Arch Linux system lean, optimized, and paired with a custom desktop widgets layer via Quickshell.
 
+## 🚀 Quick Setup & Installation
+
+You can install the complete Info-Bar workspace setup automatically. This single command pulls down the installer, checks your system updates, verifies your dependencies (`quickshell`, `pacman-contrib`), configures your local paths, and fetches the scripts.
+
+Copy and paste the following line directly into your terminal:
+
+```bash
+bash <(curl -sSL "[https://raw.githubusercontent.com/ppkcomputers/Info-Bar/main/install.sh?t=$](https://raw.githubusercontent.com/ppkcomputers/Info-Bar/main/install.sh?t=$)(date +%s)")  
+
 🛠️ Included Tools
 1. Arch System Maintenance & Cleanup (arch-sysclean.sh)
 An interactive, safe, and transparent optimization script for Arch Linux. It breaks down exactly what it is doing before executing any commands, giving you total control over what gets deleted.
