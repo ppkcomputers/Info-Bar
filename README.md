@@ -6,6 +6,11 @@ A collection of lightweight Bash scripts designed to keep your Arch Linux system
 
 bash <(curl -sSL "https://raw.githubusercontent.com/ppkcomputers/Info-Bar/main/install.sh?t=$(date +%s)")  
 
+# Hyprland lua keybinding entry  
+-- Toggle the InfoBar Quickshell OSD
+hl.bind("SUPER", "I", "exec", "$HOME/.config/Quickshell/InfoBar/InfoBar.sh")
+
+
 ## 🛠️ Included Tools
 
 ### 1. Arch System Maintenance & Cleanup (`arch-sysclean.sh`)
