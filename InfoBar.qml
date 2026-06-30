@@ -32,6 +32,13 @@ ShellRoot {
         }
     }
 
+    // ─── System Clean Trigger ───────────────────────────
+    Process {
+        id: syscleanProc
+        // Launches the script inside a terminal window (using sh to find an available terminal or explicit choice)
+        command: ["sh", "-c", "kitty bash -c 'sudo $HOME/.config/Quickshell/InfoBar/arch-sysclean.sh; exec bash' || alacritty -e sudo sh -c '$HOME/.config/Quickshell/InfoBar/arch-sysclean.sh' || foot sudo sh -c '$HOME/.config/Quickshell/InfoBar/arch-sysclean.sh'"]
+    }
+
     // ─── System Monitors ────────────────────────────────
     Process {
         id: cpuProc
@@ -107,45 +114,48 @@ ShellRoot {
 
             OUTPUT=""
             # 2. Iterate through every single discovered share path
-            for share in $SHARES; do
+            for share in $SHARES;
+            do
                 bname=$(basename "$share")
 
                 # 3. Apply the non-cached df test on the discovered path
-                if timeout 1 df "$share" >/dev/null 2>&1; then
-                    STATUS="ONLINE"
+                if timeout 1 df "$share" >/dev/null 2>&1;
+                then
+                STATUS="ONLINE"
+                else
+                    STATUS="OFFLINE"
+                    fi
+
+                    # Format output line by line: "Folder: STATUS"
+                    if [ -z "$OUTPUT" ];
+                    then
+                    OUTPUT="\${bname}: \${STATUS}"
                     else
-                        STATUS="OFFLINE"
+                        OUTPUT="\${OUTPUT}\n\${bname}: \${STATUS}"
                         fi
+                        done
 
-                        # Format output line by line: "Folder: STATUS"
-                        if [ -z "$OUTPUT" ]; then
-                            OUTPUT="\${bname}: \${STATUS}"
-                            else
-                                OUTPUT="\${OUTPUT}\n\${bname}: \${STATUS}"
-                                fi
-                                done
+                        echo -e "$OUTPUT"
+                        `]
+                        stdout: SplitParser {
+                            splitMarker: "\n"
+                            onRead: (line) => {
+                                if (sharedFoldersProc.lineCount === 0) {
+                                    shareStatusDisplay = ""
+                                }
 
-                                echo -e "$OUTPUT"
-                                `]
-                                stdout: SplitParser {
-                                    splitMarker: "\n"
-                                    onRead: (line) => {
-                                        if (sharedFoldersProc.lineCount === 0) {
-                                            shareStatusDisplay = ""
-                                        }
-
-                                        let cleanLine = line.trim()
-                                        if (cleanLine !== "") {
-                                            if (shareStatusDisplay === "") {
-                                                shareStatusDisplay = cleanLine
-                                            } else {
-                                                shareStatusDisplay += "\n" + cleanLine
-                                            }
-                                        }
-                                        sharedFoldersProc.lineCount++
+                                let cleanLine = line.trim()
+                                if (cleanLine !== "") {
+                                    if (shareStatusDisplay === "") {
+                                        shareStatusDisplay = cleanLine
+                                    } else {
+                                        shareStatusDisplay += "\n" + cleanLine
                                     }
                                 }
-                                property int lineCount: 0
+                                sharedFoldersProc.lineCount++
+                            }
+                        }
+                        property int lineCount: 0
     }
 
     // ─── Lifecycle & Timers ─────────────────────────────
@@ -165,13 +175,18 @@ ShellRoot {
         repeat: true
         triggeredOnStart: true
         onTriggered: {
-            cpuProc.running = false; cpuProc.running = true
-            ramProc.running = false; ramProc.running = true
-            diskProc.running = false; diskProc.running = true
-            weatherProc.running = false; weatherProc.running = true
+            cpuProc.running = false;
+            cpuProc.running = true
+            ramProc.running = false;
+            ramProc.running = true
+            diskProc.running = false;
+            diskProc.running = true
+            weatherProc.running = false;
+            weatherProc.running = true
 
             sharedFoldersProc.lineCount = 0
-            sharedFoldersProc.running = false; sharedFoldersProc.running = true
+            sharedFoldersProc.running = false;
+            sharedFoldersProc.running = true
         }
     }
 
@@ -309,14 +324,14 @@ ShellRoot {
                         Row {
                             spacing: 16
                             anchors.horizontalCenter: parent.horizontalCenter
-                            Text { text: "CPU";  color: "#b0ac63"; font.pixelSize: 18; font.family: "Monospace"; opacity: 0.9 }
+                            Text { text: "CPU"; color: "#b0ac63"; font.pixelSize: 18; font.family: "Monospace"; opacity: 0.9 }
                             Text { text: cpuUsage; color: "#b0ac63"; font.pixelSize: 18; font.family: "Monospace"; font.bold: true }
                         }
 
                         Row {
                             spacing: 16
                             anchors.horizontalCenter: parent.horizontalCenter
-                            Text { text: "RAM";  color: "#b0ac63"; font.pixelSize: 18; font.family: "Monospace"; opacity: 0.9 }
+                            Text { text: "RAM"; color: "#b0ac63"; font.pixelSize: 18; font.family: "Monospace"; opacity: 0.9 }
                             Text { text: ramUsage; color: "#b0ac63"; font.pixelSize: 18; font.family: "Monospace"; font.bold: true }
                         }
                     }
@@ -395,6 +410,43 @@ ShellRoot {
                                         return (index < step) ? "#b0ac63" : Qt.rgba(0.2, 0.2, 0.2, 0.9)
                                     }
                                     radius: 4
+                                }
+                            }
+                        }
+
+                        // ─── Extended Storage Cleaner Button ───
+                        Rectangle {
+                            id: cleanButton
+                            width: parent.width
+                            height: 36
+                            radius: 8
+                            color: mouseArea.pressed ? Qt.rgba(0.69, 0.675, 0.388, 0.1) : Qt.rgba(0.69, 0.675, 0.388, 0.25)
+                            border.color: "#b0ac63"
+                            border.width: 1
+
+                            // Physical depressed visual animations
+                            scale: mouseArea.pressed ? 0.95 : 1.0
+                            opacity: mouseArea.pressed ? 0.7 : 1.0
+
+                            Behavior on scale { NumberAnimation { duration: 75; easing.type: Easing.OutQuad } }
+                            Behavior on opacity { NumberAnimation { duration: 75 } }
+
+                            Text {
+                                anchors.centerIn: parent
+                                text: "Run System Cleanup"
+                                color: "#b0ac63"
+                                font.pixelSize: 14
+                                font.family: "Monospace"
+                                font.bold: true
+                            }
+
+                            MouseArea {
+                                id: mouseArea
+                                anchors.fill: parent
+                                cursorShape: Qt.PointingHandCursor
+                                onClicked: {
+                                    syscleanProc.running = false
+                                    syscleanProc.running = true
                                 }
                             }
                         }
@@ -499,7 +551,6 @@ ShellRoot {
                                 color: "#b0ac63"
                                 font.pixelSize: 13
                                 font.family: "Monospace"
-
                             }
 
                             Rectangle {
