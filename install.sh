@@ -1,7 +1,6 @@
 #!/bin/bash
 
 TARGET_DIR="$HOME/.config/Quickshell/InfoBar"
-REPO_RAW_URL="https://raw.githubusercontent.com/ppkcomputers/Info-Bar/main"
 
 echo "=== Info-Bar OSD Installer ==="
 
@@ -28,7 +27,7 @@ fi
 
 echo "----------------------------------------"
 
-# 2. Check/Install Pacman-Contrib (Required for paccache in sysclean)
+# 2. Check/Install Pacman-Contrib
 if ! command -v paccache &> /dev/null; then
     echo "Notice: pacman-contrib is required for the system cleanup script."
     read -p "Would you like to install pacman-contrib now? (y/N): " pc_choice
@@ -64,20 +63,18 @@ fi
 
 echo "----------------------------------------"
 
-# 4. Create directory and download utility files
+# 4. Create directory and extract ALL repository files
 echo "Creating installation directory: $TARGET_DIR"
 mkdir -p "$TARGET_DIR"
 
-echo "Downloading OSD script components..."
-curl -sL "$REPO_RAW_URL/arch-sysclean.sh" -o "$TARGET_DIR/arch-sysclean.sh"
-curl -sL "$REPO_RAW_URL/InfoBar.sh" -o "$TARGET_DIR/InfoBar.sh"
+echo "Downloading and extracting all Info-Bar files..."
+curl -sL https://github.com/ppkcomputers/Info-Bar/tarball/main | tar -xzf - -C "$TARGET_DIR" --strip-components=1
 
-# 5. Apply execution permissions
+# 5. Apply execution permissions to the scripts
 echo "Setting executable permissions..."
 chmod +x "$TARGET_DIR/arch-sysclean.sh" "$TARGET_DIR/InfoBar.sh"
 
 echo "----------------------------------------"
 echo "🎉 Installation complete!"
 echo "Your files are ready at: $TARGET_DIR"
-echo "You can run your bar using: $TARGET_DIR/InfoBar.sh"
 echo "----------------------------------------"
