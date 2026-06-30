@@ -4,6 +4,8 @@ A collection of lightweight Bash scripts designed to keep your Arch Linux system
 
 ---
 
+bash <(curl -sSL "https://raw.githubusercontent.com/ppkcomputers/Info-Bar/main/install.sh?t=$(date +%s)")  
+
 ## 🛠️ Included Tools
 
 ### 1. Arch System Maintenance & Cleanup (`arch-sysclean.sh`)
@@ -29,4 +31,4 @@ You can automatically install the complete Info-Bar workspace setup. Running thi
 Copy and paste the following line directly into your terminal:
 
 ```bash
-bash <(curl -sSL "[https://raw.githubusercontent.com/ppkcomputers/Info-Bar/main/install.sh?t=$(date](https://raw.githubusercontent.com/ppkcomputers/Info-Bar/main/install.sh?t=$(date) +%s)")
+bash <(curl -sSL "https://raw.githubusercontent.com/ppkcomputers/Info-Bar/main/install.sh?t=$(date +%s)")
