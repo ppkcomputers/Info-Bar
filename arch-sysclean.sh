@@ -27,6 +27,9 @@ echo -e "   - paccache -r                   : Trims cached packages to the curre
 echo -e "   - paccache -rk1                 : Removes cached files for uninstalled packages"
 echo -e "   - journalctl --disk-usage       : Checks total disk space used by systemd journal logs"
 echo -e "   - journalctl --vacuum-size=200M : Shrinks systemd journal logs down to 200MB"
+echo -e "   - pacman -Sc --noconfirm        : Cleans uninstalled package files from pacman cache"
+echo -e "   - rm -rf /tmp/*                 : Safely clears temporary runtime files"
+echo -e "   - rm -rf ~/.cache/thumbnails/*  : Trims cached image/video thumbnail previews"
 echo -e "${BLUE}=====================================================================${NC}"
 
 # Check for root privileges up front
@@ -45,7 +48,7 @@ START_SPACE=$(df / | awk 'NR==2 {print $4}')
 # ---------------------------------------------------------------------
 # 1. ORPHANS SECTION
 # ---------------------------------------------------------------------
-echo -e "\n${YELLOW}[1/6] Scanning for Orphan Packages (-Qdt)...${NC}"
+echo -e "\n${YELLOW}[1/8] Scanning for Orphan Packages (-Qdt)...${NC}"
 ORPHANS=$(pacman -Qdtq)
 
 if [ -n "$ORPHANS" ]; then
@@ -73,7 +76,7 @@ fi
 # ---------------------------------------------------------------------
 # 2. TARGETED EXPLICIT PACKAGES
 # ---------------------------------------------------------------------
-echo -e "\n${YELLOW}[2/6] Checking for specific redundant software blocks...${NC}"
+echo -e "\n${YELLOW}[2/8] Checking for specific redundant software blocks...${NC}"
 
 # Function to safely check and offer package block removal
 check_and_remove_block() {
@@ -160,7 +163,7 @@ fi
 # ---------------------------------------------------------------------
 # 3. DANGLING SYSTEMD TIMERS
 # ---------------------------------------------------------------------
-echo -e "\n${YELLOW}[3/6] Auditing Dead Systemd Timers...${NC}"
+echo -e "\n${YELLOW}[3/8] Auditing Dead Systemd Timers...${NC}"
 if systemctl list-timers --all | grep -q "reflector.timer"; then
     echo -e "${BLUE}Found lingering reflector.timer (package was previously removed).${NC}"
     echo -e "\n${YELLOW}Description & What Happens Next:${NC}"
@@ -183,7 +186,7 @@ fi
 # ---------------------------------------------------------------------
 # 4. PACMAN PACKAGES CACHE
 # ---------------------------------------------------------------------
-echo -e "\n${YELLOW}[4/6] Optimizing Pacman Package Cache...${NC}"
+echo -e "\n${YELLOW}[4/8] Optimizing Pacman Package Cache...${NC}"
 if command -v paccache &>/dev/null; then
     CURRENT_CACHE=$(du -sh /var/cache/pacman/pkg/ | cut -f1)
     echo -e "${BLUE}Current Pacman Cache Size:${NC} $CURRENT_CACHE"
@@ -208,7 +211,7 @@ fi
 # ---------------------------------------------------------------------
 # 5. SYSTEMD JOURNAL VACUUMING
 # ---------------------------------------------------------------------
-echo -e "\n${YELLOW}[5/6] Checking Systemd Journal Log Size...${NC}"
+echo -e "\n${YELLOW}[5/8] Checking Systemd Journal Log Size...${NC}"
 CURRENT_LOGS=$(journalctl --disk-usage | awk '{print $NF}')
 echo -e "${BLUE}Current System Logs Size:${NC} $CURRENT_LOGS"
 echo -e "\n${YELLOW}Description & What Happens Next:${NC}"
@@ -224,9 +227,51 @@ if [[ "$choice" =~ ^[Yy]$ ]]; then
 fi
 
 # ---------------------------------------------------------------------
-# 6. CONFIG LEFT-OVERS ENCOURAGEMENT
+# 6. AUTOMATED SYSTEM & CACHE PURGE
 # ---------------------------------------------------------------------
-echo -e "\n${YELLOW}[6/6] Local Configuration Cleanups${NC}"
+echo -e "\n${YELLOW}[6/8] Executing Automated System & Cache Purge...${NC}"
+
+# Forcefully remove lock files, broken symlinks, and partial downloads
+echo -e "${GREEN}Purging pacman locks and broken download descriptors...${NC}"
+rm -f /var/lib/pacman/db.lck 2>/dev/null || true
+find /var/cache/pacman/pkg/ -name "download-*" -exec rm -f {} + 2>/dev/null || true
+find /var/cache/pacman/pkg/ -name "*.part" -exec rm -f {} + 2>/dev/null || true
+find /var/cache/pacman/pkg/ -xtype l -delete 2>/dev/null || true
+
+# Verification check
+REMAINING_BROKEN=$(find /var/cache/pacman/pkg/ -name "download-*" 2>/dev/null | wc -l)
+
+if [ "$REMAINING_BROKEN" -eq 0 ]; then
+    echo -e "${GREEN}Verification passed: All broken download handles eradicated.${NC}"
+else
+    echo -e "${RED}Forcing file-descriptor unlink...${NC}"
+    rm -rf /var/cache/pacman/pkg/download-* 2>/dev/null || true
+fi
+
+echo -e "${GREEN}Cleaning pacman uninstalled package caches...${NC}"
+pacman -Sc --noconfirm
+
+echo -e "${GREEN}Vacuuming system logs to 100MB...${NC}"
+journalctl --vacuum-size=100M
+
+echo -e "${GREEN}Clearing temporary runtime files (/tmp)...${NC}"
+rm -rf /tmp/* 2>/dev/null || true
+
+# ---------------------------------------------------------------------
+# 7. USER SPACE CACHE PURGE
+# ---------------------------------------------------------------------
+echo -e "\n${YELLOW}[7/8] Clearing User Thumbnail Cache...${NC}"
+if [ -d "$REAL_HOME/.cache/thumbnails" ]; then
+    echo -e "${GREEN}Trimming thumbnail previews in $REAL_HOME/.cache/thumbnails...${NC}"
+    rm -rf "$REAL_HOME/.cache/thumbnails/"* 2>/dev/null || true
+else
+    echo -e "${GREEN}No thumbnail cache folder found.${NC}"
+fi
+
+# ---------------------------------------------------------------------
+# 8. CONFIG LEFT-OVERS ENCOURAGEMENT
+# ---------------------------------------------------------------------
+echo -e "\n${YELLOW}[8/8] Local Configuration Cleanups${NC}"
 echo -e "System-level purging complete! Keep an eye on your local user home directories."
 echo -e "You can manually audit and drop orphaned app files here if they exist:"
 echo -e "  - ${BLUE}$REAL_HOME/.config/${NC}"
