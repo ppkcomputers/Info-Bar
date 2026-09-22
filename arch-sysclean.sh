@@ -30,6 +30,7 @@ echo -e "   - journalctl --vacuum-size=200M : Shrinks systemd journal logs down 
 echo -e "   - pacman -Sc --noconfirm        : Cleans uninstalled package files from pacman cache"
 echo -e "   - rm -rf /tmp/*                 : Safely clears temporary runtime files"
 echo -e "   - rm -rf ~/.cache/thumbnails/*  : Trims cached image/video thumbnail previews"
+echo -e "   - snapper delete                : Purges old system recovery snapshots"
 echo -e "${BLUE}=====================================================================${NC}"
 
 # Check for root privileges up front
@@ -48,7 +49,7 @@ START_SPACE=$(df / | awk 'NR==2 {print $4}')
 # ---------------------------------------------------------------------
 # 1. ORPHANS SECTION
 # ---------------------------------------------------------------------
-echo -e "\n${YELLOW}[1/8] Scanning for Orphan Packages (-Qdt)...${NC}"
+echo -e "\n${YELLOW}[1/9] Scanning for Orphan Packages (-Qdt)...${NC}"
 ORPHANS=$(pacman -Qdtq)
 
 if [ -n "$ORPHANS" ]; then
@@ -76,7 +77,7 @@ fi
 # ---------------------------------------------------------------------
 # 2. TARGETED EXPLICIT PACKAGES
 # ---------------------------------------------------------------------
-echo -e "\n${YELLOW}[2/8] Checking for specific redundant software blocks...${NC}"
+echo -e "\n${YELLOW}[2/9] Checking for specific redundant software blocks...${NC}"
 
 # Function to safely check and offer package block removal
 check_and_remove_block() {
@@ -127,43 +128,10 @@ check_and_remove_block "Redundant Mirroring Utilities" \
     "  Standard Arch Reflector setup. Safe to drop since you use cachyos-rate-mirrors." \
     reflector
 
-# Dynamic Network & Sharing breakdown
-NETWORK_TARGETS=(samba gvfs-smb gvfs-dnssd arp-scan tcpdump wireshark-cli nmap)
-FOUND_NET=()
-
-for pkg in "${NETWORK_TARGETS[@]}"; do
-    if pacman -Qq "$pkg" &>/dev/null; then
-        FOUND_NET+=("$pkg")
-    fi
-done
-
-if [ ${#FOUND_NET[@]} -gt 0 ]; then
-    echo -e "\n${BLUE}Found Network & Sharing Services Packages:${NC}"
-    for p in "${FOUND_NET[@]}"; do
-        # Dynamically query local descriptions and trim extra formatting spaces
-        PKG_DESC=$(pacman -Qi "$p" 2>/dev/null | grep -E "^Description" | cut -d':' -f2- | xargs)
-        echo -e "  - ${GREEN}$p${NC} : $PKG_DESC"
-    done
-
-    echo -e "${YELLOW}Description & What Happens Next:${NC}"
-    echo -e "  This block handles local network discovery, file sharing, and analysis toolsets."
-    echo -e "  If you choose YES (y): The command 'pacman -Rns' will explicitly strip out"
-    echo -e "  this pre-defined structural group of applications, freeing up system storage."
-    echo -e "  If you choose NO (n): This software block will remain completely untouched."
-
-    read -p "Remove this entire block? (y/N): " choice
-    if [[ "$choice" =~ ^[Yy]$ ]]; then
-        echo -e "${GREEN}Removing Network & Sharing Services stack...${NC}"
-        pacman -Rns "${FOUND_NET[@]}"
-    else
-        echo -e "Keeping Network & Sharing Services stack."
-    fi
-fi
-
 # ---------------------------------------------------------------------
 # 3. DANGLING SYSTEMD TIMERS
 # ---------------------------------------------------------------------
-echo -e "\n${YELLOW}[3/8] Auditing Dead Systemd Timers...${NC}"
+echo -e "\n${YELLOW}[3/9] Auditing Dead Systemd Timers...${NC}"
 if systemctl list-timers --all | grep -q "reflector.timer"; then
     echo -e "${BLUE}Found lingering reflector.timer (package was previously removed).${NC}"
     echo -e "\n${YELLOW}Description & What Happens Next:${NC}"
@@ -186,7 +154,7 @@ fi
 # ---------------------------------------------------------------------
 # 4. PACMAN PACKAGES CACHE
 # ---------------------------------------------------------------------
-echo -e "\n${YELLOW}[4/8] Optimizing Pacman Package Cache...${NC}"
+echo -e "\n${YELLOW}[4/9] Optimizing Pacman Package Cache...${NC}"
 if command -v paccache &>/dev/null; then
     CURRENT_CACHE=$(du -sh /var/cache/pacman/pkg/ | cut -f1)
     echo -e "${BLUE}Current Pacman Cache Size:${NC} $CURRENT_CACHE"
@@ -211,7 +179,7 @@ fi
 # ---------------------------------------------------------------------
 # 5. SYSTEMD JOURNAL VACUUMING
 # ---------------------------------------------------------------------
-echo -e "\n${YELLOW}[5/8] Checking Systemd Journal Log Size...${NC}"
+echo -e "\n${YELLOW}[5/9] Checking Systemd Journal Log Size...${NC}"
 CURRENT_LOGS=$(journalctl --disk-usage | awk '{print $NF}')
 echo -e "${BLUE}Current System Logs Size:${NC} $CURRENT_LOGS"
 echo -e "\n${YELLOW}Description & What Happens Next:${NC}"
@@ -227,9 +195,45 @@ if [[ "$choice" =~ ^[Yy]$ ]]; then
 fi
 
 # ---------------------------------------------------------------------
-# 6. AUTOMATED SYSTEM & CACHE PURGE
+# 6. BTRFS / SNAPPER SNAPSHOT CLEANUP
 # ---------------------------------------------------------------------
-echo -e "\n${YELLOW}[6/8] Executing Automated System & Cache Purge...${NC}"
+echo -e "\n${YELLOW}[6/9] Auditing System Snapshots (Snapper)...${NC}"
+if command -v snapper &>/dev/null; then
+    SNAPSHOTS=$(snapper -c root list 2>/dev/null | awk 'NR>2 {print $1, $3, $7, $8}' | grep -v '0\*')
+    if [ -n "$SNAPSHOTS" ]; then
+        echo -e "${BLUE}Found system recovery snapshots:${NC}"
+        snapper -c root list 2>/dev/null
+        echo -e "\n${YELLOW}Description & What Happens Next:${NC}"
+        echo -e "  Old Btrfs system snapshots can accumulate and consume significant disk space."
+        echo -e "  If you choose YES (y): You can specify a range or single snapshot ID to remove,"
+        echo -e "  or run snapper cleanup algorithms to prune old timeline/number snapshots."
+        echo -e "  If you choose NO (n): All existing snapshots will remain saved on disk."
+
+        read -p "Would you like to delete older snapshots? (y/N): " choice
+        if [[ "$choice" =~ ^[Yy]$ ]]; then
+            read -p "Enter snapshot IDs to delete (e.g., 10-15 or 12 13 14), or press ENTER to run default cleanup algorithm: " snap_ids
+            if [ -n "$snap_ids" ]; then
+                echo -e "${GREEN}Deleting snapshot(s) $snap_ids...${NC}"
+                snapper -c root delete $snap_ids
+            else
+                echo -e "${GREEN}Running Snapper cleanup algorithm...${NC}"
+                snapper -c root cleanup timeline
+                snapper -c root cleanup number
+            fi
+        else
+            echo -e "Skipping snapshot removal."
+        fi
+    else
+        echo -e "${GREEN}No extra snapshots found to prune.${NC}"
+    fi
+else
+    echo -e "${GREEN}Snapper not detected on this system. Skipping.${NC}"
+fi
+
+# ---------------------------------------------------------------------
+# 7. AUTOMATED SYSTEM & CACHE PURGE
+# ---------------------------------------------------------------------
+echo -e "\n${YELLOW}[7/9] Executing Automated System & Cache Purge...${NC}"
 
 # Forcefully remove lock files, broken symlinks, and partial downloads
 echo -e "${GREEN}Purging pacman locks and broken download descriptors...${NC}"
@@ -258,9 +262,9 @@ echo -e "${GREEN}Clearing temporary runtime files (/tmp)...${NC}"
 rm -rf /tmp/* 2>/dev/null || true
 
 # ---------------------------------------------------------------------
-# 7. USER SPACE CACHE PURGE
+# 8. USER SPACE CACHE PURGE
 # ---------------------------------------------------------------------
-echo -e "\n${YELLOW}[7/8] Clearing User Thumbnail Cache...${NC}"
+echo -e "\n${YELLOW}[8/9] Clearing User Thumbnail Cache...${NC}"
 if [ -d "$REAL_HOME/.cache/thumbnails" ]; then
     echo -e "${GREEN}Trimming thumbnail previews in $REAL_HOME/.cache/thumbnails...${NC}"
     rm -rf "$REAL_HOME/.cache/thumbnails/"* 2>/dev/null || true
@@ -269,9 +273,9 @@ else
 fi
 
 # ---------------------------------------------------------------------
-# 8. CONFIG LEFT-OVERS ENCOURAGEMENT
+# 9. CONFIG LEFT-OVERS ENCOURAGEMENT
 # ---------------------------------------------------------------------
-echo -e "\n${YELLOW}[8/8] Local Configuration Cleanups${NC}"
+echo -e "\n${YELLOW}[9/9] Local Configuration Cleanups${NC}"
 echo -e "System-level purging complete! Keep an eye on your local user home directories."
 echo -e "You can manually audit and drop orphaned app files here if they exist:"
 echo -e "  - ${BLUE}$REAL_HOME/.config/${NC}"
